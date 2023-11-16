@@ -24,49 +24,71 @@ app.listen(port, () => {
 
 
 
-function getMaxGlucoseDateBefore(userId, callback) {
-  // Assuming user_id is the foreign key column in the glucose_readings table
-  db.all('SELECT * FROM glucose_readings_before WHERE user_id = ? ORDER BY date DESC LIMIT 1', [userId], (err, rows) => {
-    if (err) {
-      console.error(err);
-      callback(null);
-    } else {
-      callback(rows.length > 0 ? rows[0].date : null);
-    }
-  });
-}
-function getMaxGlucoseDateAfter(userId, callback) {
-  // Assuming user_id is the foreign key column in the glucose_readings table
-  db.all('SELECT * FROM glucose_readings_after WHERE user_id = ? ORDER BY date DESC LIMIT 1', [userId], (err, rows) => {
-    if (err) {
-      console.error(err);
-      callback(null);
-    } else {
-      callback(rows.length > 0 ? rows[0].date : null);
-    }
+function getMaxGlucoseDateBefore(userId) {
+  return new Promise((resolve, reject) => {
+    db.all('SELECT * FROM glucose_readings_before WHERE user_id = ? ORDER BY date DESC LIMIT 1', [userId], (err, rows) => {
+      if (err) {
+        console.error(err);
+        reject(err);
+      } else {
+        resolve(rows.length > 0 ? rows[0].date : null);
+      }
+    });
   });
 }
 
-function getMaxGlucoseValueBefore(userId, callback) {
-  // Assuming user_id is the foreign key column in the glucose_readings table
-  db.all('SELECT * FROM glucose_readings_before WHERE user_id = ? ORDER BY value DESC LIMIT 1', [userId], (err, rows) => {
+
+function getMaxGlucoseDateAfter(userId, callback) {
+  return new Promise((resolve, reject) =>{
+  db.all('SELECT * FROM glucose_readings_after WHERE user_id = ? ORDER BY date DESC LIMIT 1', [userId], (err, rows) => {
     if (err) {
       console.error(err);
-      callback(null);
+      reject(err);
     } else {
-      callback(rows.length > 0 ? rows[0].value : null);
+      resolve(rows.length > 0 ? rows[0].date : null);
     }
   });
+})
 }
-function getMaxGlucoseValueAfter(userId, callback) {
-  // Assuming user_id is the foreign key column in the glucose_readings table
-  db.all('SELECT * FROM glucose_readings_after WHERE user_id = ? ORDER BY value DESC LIMIT 1', [userId], (err, rows) => {
-    if (err) {
-      console.error(err);
-      callback(null);
-    } else {
-      callback(rows.length > 0 ? rows[0].value : null);
-    }
+
+async function getMaxGlucoseValue(userId) {
+  const before = await getMaxGlucoseValueBefore(userId);
+  const after = await getMaxGlucoseValueAfter(userId);
+
+
+  if (before == null && after == null) {
+    return 100;
+  }
+  if (before > after) {
+    return before;
+  }
+  return after;
+}
+
+
+async function getMaxGlucoseValueBefore(userId) {
+  return new Promise((resolve, reject) => {
+    db.all('SELECT * FROM glucose_readings_before WHERE user_id = ? ORDER BY value DESC LIMIT 1', [userId], (err, rows) => {
+      if (err) {
+        console.error(err);
+        reject(err);
+      } else {
+        resolve(rows.length > 0 ? rows[0].value : null);
+      }
+    });
+  });
+}
+
+async function getMaxGlucoseValueAfter(userId) {
+  return new Promise((resolve, reject) => {
+    db.all('SELECT * FROM glucose_readings_after WHERE user_id = ? ORDER BY value DESC LIMIT 1', [userId], (err, rows) => {
+      if (err) {
+        console.error(err);
+        reject(err);
+      } else {
+        resolve(rows.length > 0 ? rows[0].value : null);
+      }
+    });
   });
 }
 
@@ -106,6 +128,8 @@ app.post('/api/glucose_readings_after', (req, res) => {
         res.status(201).send('Glucose reading added successfully');
       }
     });
+    db.run('UPDATE users SET glucose_level = ? WHERE id = ?',
+    [value, user_id ])
 });
 
 
@@ -130,62 +154,68 @@ app.get('/api/users/:id', (req, res) => {
 
 
 
-app.get('/api/users/:userId/glucose_readings_before', (req, res) => {
-  const userId = req.params.userId;
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
+app.get('/api/users/:userId/glucose_readings_before', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
 
-  // Assuming user_id is the foreign key column in the glucose_readings table
-  //only current month data
-  //WHERE date LIKE 2023-11_
-  db.all(`SELECT * FROM glucose_readings_before WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`, [userId, currentYear.toString(),currentMonth.toString()], (err, rows) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send('Internal Server Error');
-    } else {
-      // Use callbacks to handle asynchronous results
-      getMaxGlucoseValueBefore(userId, (maxValue) => {
-        getMaxGlucoseDateBefore(userId, (maxDate) => {
-          const result = {
-            readings: rows,
-            maxGlucoseValueBefore: maxValue,
-            maxGlucoseDateBefore: maxDate
-          };
-          res.json(result);
-        });
+    const rows = await new Promise((resolve, reject) => {
+      db.all(`SELECT * FROM glucose_readings_before WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`, [userId, currentYear.toString(), currentMonth.toString()], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
       });
-    }
-  });
+    });
+
+    const result = {
+      readingsBefore: rows,
+      maxGlucoseValue: await getMaxGlucoseValue(userId),
+      maxGlucoseDate: await getMaxGlucoseDateBefore(userId),
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Internal Server Error');
+  }
 });
 
 
-app.get('/api/users/:userId/glucose_readings_after', (req, res) => {
-  const userId = req.params.userId;
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
 
-  // Assuming user_id is the foreign key column in the glucose_readings table
-  //only current month data
-  //WHERE date LIKE 2023-11_
-  db.all(`SELECT * FROM glucose_readings_after WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`, [userId, currentYear.toString(),currentMonth.toString()], (err, rows) => {
-    if (err) {
-      console.error(err);
-      res.status(500).send('Internal Server Error');
-    } else {
-      // Use callbacks to handle asynchronous results
-      getMaxGlucoseValueAfter(userId, (maxValue) => {
-        getMaxGlucoseDateAfter(userId, (maxDate) => {
-          const result = {
-            readings: rows,
-            maxGlucoseValueAfter: maxValue,
-            maxGlucoseDateAfter: maxDate
-          };
-          res.json(result);
-        });
+
+app.get('/api/users/:userId/glucose_readings_after', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(`SELECT * FROM glucose_readings_after WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`, [userId, currentYear.toString(), currentMonth.toString()], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
       });
-    }
-  });
+    });
+
+    const result = {
+      readingsAfter: rows,
+      maxGlucoseValue: await getMaxGlucoseValue(userId),
+      maxGlucoseDate: await getMaxGlucoseDateAfter(userId),
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Internal Server Error');
+  }
 });
+
+
 
 
 
