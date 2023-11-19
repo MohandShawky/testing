@@ -13,8 +13,8 @@ const db = new sqlite3.Database('sugarcare_app.db', (err) => {
     console.error('Error connecting to SQLite database:', err);
   } else {
     console.log('Connected to SQLite database');
-    
-}
+
+  }
 });
 
 // Define your API routes and logic here
@@ -39,16 +39,16 @@ function getMaxGlucoseDateBefore(userId) {
 
 
 function getMaxGlucoseDateAfter(userId, callback) {
-  return new Promise((resolve, reject) =>{
-  db.all('SELECT * FROM glucose_readings_after WHERE user_id = ? ORDER BY date DESC LIMIT 1', [userId], (err, rows) => {
-    if (err) {
-      console.error(err);
-      reject(err);
-    } else {
-      resolve(rows.length > 0 ? rows[0].date : null);
-    }
-  });
-})
+  return new Promise((resolve, reject) => {
+    db.all('SELECT * FROM glucose_readings_after WHERE user_id = ? ORDER BY date DESC LIMIT 1', [userId], (err, rows) => {
+      if (err) {
+        console.error(err);
+        reject(err);
+      } else {
+        resolve(rows.length > 0 ? rows[0].date : null);
+      }
+    });
+  })
 }
 
 async function getMaxGlucoseValue(userId) {
@@ -99,10 +99,10 @@ async function getMaxGlucoseValueAfter(userId) {
 
 
 app.post('/api/glucose_readings_before', (req, res) => {
-  const { user_id, date , value } = req.body;
+  const { user_id, date, value } = req.body;
 
   db.run('INSERT INTO glucose_readings_before (user_id,date,value) VALUES (?, ?, ?)',
-    [user_id,date, value ],
+    [user_id, date, value],
     function (err) {
       if (err) {
         console.error('Error inserting glucose reading:', err);
@@ -115,10 +115,10 @@ app.post('/api/glucose_readings_before', (req, res) => {
 });
 
 app.post('/api/glucose_readings_after', (req, res) => {
-  const { user_id, date , value } = req.body;
+  const { user_id, date, value } = req.body;
 
   db.run('INSERT INTO glucose_readings_after (user_id,date,value) VALUES (?, ?, ?)',
-    [user_id,date, value ],
+    [user_id, date, value],
     function (err) {
       if (err) {
         console.error('Error inserting glucose reading:', err);
@@ -128,12 +128,12 @@ app.post('/api/glucose_readings_after', (req, res) => {
         res.status(201).send('Glucose reading added successfully');
       }
     });
-    db.run('UPDATE users SET glucose_level = ? WHERE id = ?',
-    [value, user_id ])
+  db.run('UPDATE users SET glucose_level = ? WHERE id = ?',
+    [value, user_id])
 });
 
 
-//get user (spicifed id)
+
 app.get('/api/users/:id', (req, res) => {
   const userId = req.params.id;
   db.get('SELECT * FROM users WHERE id = ?', [userId], (err, row) => {
@@ -213,6 +213,28 @@ app.get('/api/users/:userId/glucose_readings_after', async (req, res) => {
     console.error(error);
     res.status(500).send('Internal Server Error');
   }
+});
+
+
+
+
+
+app.post('/api/add_user', (req, res) => {
+  const { userId, name, height, weight, insulin, glucoseLevel, a1c, birthDate, diabetesType } = req.body;
+
+  db.run(`INSERT INTO users 
+          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [userId, name, birthDate, height, weight, diabetesType, glucoseLevel, a1c, insulin,],
+    function (err) {
+      if (err) {
+        console.error('Error inserting user:', err);
+        res.status(500).send('Internal Server Error');
+      } else {
+        console.log('User reading added with ID:', this.lastID);
+        res.status(201).send('User added successfully');
+      }
+    });
 });
 
 
