@@ -7,7 +7,6 @@ const port = 3000;
 
 app.use(bodyParser.json());
 
-// SQLite Connection
 const db = new sqlite3.Database("sugarcare_app.db", (err) => {
   if (err) {
     console.error("Error connecting to SQLite database:", err);
@@ -16,48 +15,13 @@ const db = new sqlite3.Database("sugarcare_app.db", (err) => {
   }
 });
 
-// Define your API routes and logic here
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
 
-function getMaxGlucoseDateBefore(userId) {
-  return new Promise((resolve, reject) => {
-    db.all(
-      "SELECT * FROM glucose_readings_before WHERE user_id = ? ORDER BY date DESC LIMIT 1",
-      [userId],
-      (err, rows) => {
-        if (err) {
-          console.error(err);
-          reject(err);
-        } else {
-          resolve(rows.length > 0 ? rows[0].date : null);
-        }
-      }
-    );
-  });
-}
-
-function getMaxGlucoseDateAfter(userId, callback) {
-  return new Promise((resolve, reject) => {
-    db.all(
-      "SELECT * FROM glucose_readings_after WHERE user_id = ? ORDER BY date DESC LIMIT 1",
-      [userId],
-      (err, rows) => {
-        if (err) {
-          console.error(err);
-          reject(err);
-        } else {
-          resolve(rows.length > 0 ? rows[0].date : null);
-        }
-      }
-    );
-  });
-}
-
 async function getMaxGlucoseValue(userId) {
-  const before = await getMaxGlucoseValueBefore(userId);
-  const after = await getMaxGlucoseValueAfter(userId);
+  const before = await _getMaxGlucoseValue(userId, "before");
+  const after = await _getMaxGlucoseValue(userId, "after");
 
   if (before == null && after == null) {
     return 100;
@@ -68,11 +32,11 @@ async function getMaxGlucoseValue(userId) {
   return after;
 }
 
-async function getMaxGlucoseValueBefore(userId) {
+async function _getMaxGlucoseValue(userId, type) {
   return new Promise((resolve, reject) => {
     db.all(
-      "SELECT * FROM glucose_readings_before WHERE user_id = ? ORDER BY value DESC LIMIT 1",
-      [userId],
+      "SELECT * FROM glucose_readings WHERE user_id = ? AND type = ? ORDER BY value DESC LIMIT 1",
+      [userId, type],
       (err, rows) => {
         if (err) {
           console.error(err);
@@ -85,29 +49,12 @@ async function getMaxGlucoseValueBefore(userId) {
   });
 }
 
-async function getMaxGlucoseValueAfter(userId) {
-  return new Promise((resolve, reject) => {
-    db.all(
-      "SELECT * FROM glucose_readings_after WHERE user_id = ? ORDER BY value DESC LIMIT 1",
-      [userId],
-      (err, rows) => {
-        if (err) {
-          console.error(err);
-          reject(err);
-        } else {
-          resolve(rows.length > 0 ? rows[0].value : null);
-        }
-      }
-    );
-  });
-}
-
-app.post("/api/glucose_readings_before", (req, res) => {
-  const { user_id, date, value } = req.body;
+app.post("/api/glucose_readings", (req, res) => {
+  const { user_id, date, value, type } = req.body;
 
   db.run(
-    "INSERT INTO glucose_readings_before (user_id,date,value) VALUES (?, ?, ?)",
-    [user_id, date, value],
+    "INSERT INTO glucose_readings (user_id,date,value,type) VALUES (?, ?, ?,?)",
+    [user_id, date, value, type],
     function (err) {
       if (err) {
         console.error("Error inserting glucose reading:", err);
@@ -118,25 +65,6 @@ app.post("/api/glucose_readings_before", (req, res) => {
       }
     }
   );
-});
-
-app.post("/api/glucose_readings_after", (req, res) => {
-  const { user_id, date, value } = req.body;
-
-  db.run(
-    "INSERT INTO glucose_readings_after (user_id,date,value) VALUES (?, ?, ?)",
-    [user_id, date, value],
-    function (err) {
-      if (err) {
-        console.error("Error inserting glucose reading:", err);
-        res.status(500).send("Internal Server Error");
-      } else {
-        console.log("Glucose reading added with ID:", this.lastID);
-        res.status(201).send("Glucose reading added successfully");
-      }
-    }
-  );
-  db.run("UPDATE users SET glucose_level = ? WHERE id = ?", [value, user_id]);
 });
 
 app.get("/api/users/:id", (req, res) => {
@@ -155,11 +83,11 @@ app.get("/api/users/:id", (req, res) => {
   });
 });
 
-async function getGlucoseReadingBefore(userId, currentYear, currentMonth) {
+async function getGlucoseReading(userId, currentYear, currentMonth, type) {
   const rows = await new Promise((resolve, reject) => {
     db.all(
-      `SELECT * FROM glucose_readings_before WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`,
-      [userId, currentYear.toString(), currentMonth.toString()],
+      `SELECT * FROM glucose_readings WHERE user_id = ? AND type = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`,
+      [userId, type, currentYear.toString(), currentMonth.toString()],
       (err, rows) => {
         if (err) {
           reject(err);
@@ -172,92 +100,30 @@ async function getGlucoseReadingBefore(userId, currentYear, currentMonth) {
   return rows;
 }
 
-async function getGlucoseReadingAfter(userId, currentYear, currentMonth) {
-  const rows = await new Promise((resolve, reject) => {
-    db.all(
-      `SELECT * FROM glucose_readings_after WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`,
-      [userId, currentYear.toString(), currentMonth.toString()],
-      (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      }
-    );
-  });
-  return rows;
-}
 app.get("/api/users/:userId/glucose_readings", async (req, res) => {
   try {
     const userId = req.params.userId;
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth() + 1;
 
-    const before = await getGlucoseReadingBefore(
+    const before = await getGlucoseReading(
       userId,
       currentYear,
-      currentMonth
+      currentMonth,
+      "before"
     );
-    const after = await getGlucoseReadingAfter(
+    const after = await getGlucoseReading(
       userId,
       currentYear,
-      currentMonth
+      currentMonth,
+      "after"
     );
     console.log(before);
-
-    // const rows = await new Promise((resolve, reject) => {
-    //   db.all(
-    //     `SELECT * FROM glucose_readings_before WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`,
-    //     [userId, currentYear.toString(), currentMonth.toString()],
-    //     (err, rows) => {
-    //       if (err) {
-    //         reject(err);
-    //       } else {
-    //         resolve(rows);
-    //       }
-    //     }
-    //   );
-    // });
 
     const result = {
       readingsBefore: before,
       readingsAfter: after,
       maxGlucoseValue: await getMaxGlucoseValue(userId),
-      maxGlucoseDate: await getMaxGlucoseDateBefore(userId),
-    };
-
-    res.json(result);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Internal Server Error");
-  }
-});
-
-app.get("/api/users/:userId/glucose_readings_after", async (req, res) => {
-  try {
-    const userId = req.params.userId;
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-
-    const rows = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT * FROM glucose_readings_after WHERE user_id = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`,
-        [userId, currentYear.toString(), currentMonth.toString()],
-        (err, rows) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(rows);
-          }
-        }
-      );
-    });
-
-    const result = {
-      readingsAfter: rows,
-      maxGlucoseValue: await getMaxGlucoseValue(userId),
-      maxGlucoseDate: await getMaxGlucoseDateAfter(userId),
     };
 
     res.json(result);
