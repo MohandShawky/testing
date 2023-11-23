@@ -172,3 +172,51 @@ app.post("/api/add_user", (req, res) => {
     }
   );
 });
+
+app.post("/api/sugar_intake", (req, res) => {
+  const { user_id, date, value } = req.body;
+
+  db.run(
+    "INSERT INTO sugar_intake (user_id, date, value) VALUES (?, ?, ?)",
+    [user_id, date, value],
+    function (err) {
+      if (err) {
+        console.error("Error inserting sugar intake:", err);
+        res.status(500).send("Internal Server Error");
+      } else {
+        console.log("Sugar intake added with ID:", this.lastID);
+        res.status(201).send("Sugar intake added successfully");
+      }
+    }
+  );
+});
+
+app.get("/api/users/:userId/sugar_intake", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const currentDate = new Date().toISOString().split("T")[0]; // Get current date in YYYY-MM-DD format
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        "SELECT * FROM sugar_intake WHERE user_id = ? AND date = ?",
+        [userId, currentDate],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+
+    if (rows.length > 0) {
+      res.json({ sugarIntake: rows[0].value });
+    } else {
+      res.json({ sugarIntake: 0 });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+});
