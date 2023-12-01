@@ -1,9 +1,11 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const sqlite3 = require("sqlite3");
+const axios = require("axios");
 
 const app = express();
 const port = 3000;
+const apiKey = "sbDMOuA8fhahM1M9c4FUXQ==Cwwljuya8FP8Girs";
 
 app.use(bodyParser.json());
 
@@ -173,6 +175,39 @@ app.post("/api/add_user", (req, res) => {
   );
 });
 
+//##### MEALS #####
+app.get("/api/meals/search/:query", async (req, res) => {
+  const query = req.params.query;
+  await axios
+    .get("https://api.calorieninjas.com/v1/nutrition", {
+      params: {
+        query: query,
+      },
+      headers: {
+        "X-Api-Key": apiKey,
+      },
+    })
+
+    .then((response) => {
+      const simplifiedResult = response.data.items.map((item) => ({
+        sugar: item.sugar_g,
+        calories: item.calories,
+        name: item.name,
+        servingSize: item.serving_size_g,
+      }));
+      res.json(simplifiedResult);
+    })
+    .catch((error) => {
+      if (error.response) {
+        console.error("Error:", error.response.status, error.response.data);
+      } else if (error.request) {
+        console.error("Request failed:", error.request);
+      } else {
+        console.error("Error:", error.message);
+      }
+    });
+});
+
 app.post("/api/sugar_intake", (req, res) => {
   const { user_id, date, value } = req.body;
 
@@ -194,7 +229,7 @@ app.post("/api/sugar_intake", (req, res) => {
 app.get("/api/users/:userId/sugar_intake", async (req, res) => {
   try {
     const userId = req.params.userId;
-    const currentDate = new Date().toISOString().split("T")[0]; // Get current date in YYYY-MM-DD format
+    const currentDate = new Date().toISOString().split("T")[0];
 
     const rows = await new Promise((resolve, reject) => {
       db.all(
