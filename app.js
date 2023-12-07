@@ -150,8 +150,8 @@ app.post("/api/add_user", (req, res) => {
 
   db.run(
     `INSERT INTO users 
-          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
       name,
@@ -162,6 +162,8 @@ app.post("/api/add_user", (req, res) => {
       glucoseLevel,
       a1c,
       insulin,
+      0,
+      0,
     ],
     function (err) {
       if (err) {
@@ -175,7 +177,7 @@ app.post("/api/add_user", (req, res) => {
   );
 });
 
-//##### MEALS #####
+//##### MEALS API(axios) #####
 app.get("/api/meals/search/:query", async (req, res) => {
   const query = req.params.query;
   await axios
@@ -206,6 +208,49 @@ app.get("/api/meals/search/:query", async (req, res) => {
         console.error("Error:", error.message);
       }
     });
+});
+//##############################
+
+app.post("/api/nutrients", (req, res) => {
+  const { user_id, date, name, carbs, sugar } = req.body;
+
+  db.run(
+    "INSERT INTO meals_data (user_id, name, date, carbs, sugar) VALUES (?, ?, ?, ?, ?)",
+    [user_id, name, date, carbs ?? 0, sugar ?? 0],
+    function (err) {
+      if (err) {
+        console.error("Error inserting meal:", err);
+        res.status(500).send("Internal Server Error");
+      } else {
+        console.log("Meal data added with ID:", this.lastID);
+        res.status(201).send("Meal added successfully");
+      }
+    }
+  );
+});
+
+app.get("/api/users/:userId/nutrients", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        "SELECT * FROM meals_data WHERE user_id = ?",
+        [userId],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
 });
 
 app.post("/api/sugar_intake", (req, res) => {
