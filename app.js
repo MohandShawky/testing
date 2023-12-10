@@ -150,8 +150,8 @@ app.post("/api/add_user", (req, res) => {
 
   db.run(
     `INSERT INTO users 
-          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_first_time)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
       name,
@@ -164,6 +164,7 @@ app.post("/api/add_user", (req, res) => {
       insulin,
       0,
       0,
+      1,
     ],
     function (err) {
       if (err) {
@@ -172,6 +173,72 @@ app.post("/api/add_user", (req, res) => {
       } else {
         console.log("User reading added with ID:", this.lastID);
         res.status(201).send("User added successfully");
+      }
+    }
+  );
+});
+
+app.put("/api/update_user/:userId", (req, res) => {
+  const userId = req.params.userId;
+  const {
+    height,
+    weight,
+    insulin,
+    glucoseLevel,
+    a1c,
+    birthDate,
+    diabetesType,
+  } = req.body;
+
+  db.run(
+    `UPDATE users 
+     SET birth_date = ?,
+         height = ?,
+         weight = ?,
+         diabetes_type = ?,
+         glucose_level = ?,
+         a1c = ?,
+         insulin = ?,
+         is_first_time = 0
+     WHERE id = ?`,
+    [
+      birthDate,
+      height,
+      weight,
+      diabetesType,
+      glucoseLevel,
+      a1c,
+      insulin,
+      userId,
+    ],
+    function (err) {
+      if (err) {
+        console.error("Error updating user:", err);
+        res.status(500).send("Internal Server Error");
+      } else {
+        console.log("User data updated for ID:", userId);
+        res.status(200).send("User data updated successfully");
+      }
+    }
+  );
+});
+
+app.get("/api/is_first_time/:userId", (req, res) => {
+  const userId = req.params.userId;
+
+  db.get(
+    `SELECT is_first_time FROM users WHERE id = ?`,
+    [userId],
+    function (err, row) {
+      if (err) {
+        console.error("Error fetching is_first_time:", err);
+        res.status(500).send("Internal Server Error");
+      } else {
+        if (row) {
+          res.status(200).json({ is_first_time: row.is_first_time === 1 });
+        } else {
+          res.status(404).send("User not found");
+        }
       }
     }
   );
