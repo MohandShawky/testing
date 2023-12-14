@@ -150,7 +150,7 @@ app.post("/api/add_user", (req, res) => {
 
   db.run(
     `INSERT INTO users 
-          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_first_time)
+          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
@@ -199,7 +199,7 @@ app.put("/api/update_user/:userId", (req, res) => {
          glucose_level = ?,
          a1c = ?,
          insulin = ?,
-         is_first_time = 0
+         is_completed = 0
      WHERE id = ?`,
     [
       birthDate,
@@ -223,19 +223,40 @@ app.put("/api/update_user/:userId", (req, res) => {
   );
 });
 
-app.get("/api/is_first_time/:userId", (req, res) => {
+app.put("/api/update_user_value/:userId", (req, res) => {
+  const userId = req.params.userId;
+  const { key, value } = req.body;
+
+  db.run(
+    `UPDATE users 
+     SET ${key} = ?
+     WHERE id = ?`,
+    [value, userId],
+    function (err) {
+      if (err) {
+        console.error("Error updating user:", err);
+        res.status(500).send("Internal Server Error");
+      } else {
+        console.log("User data updated for ID:", userId);
+        res.status(200).send("User data updated successfully");
+      }
+    }
+  );
+});
+
+app.get("/api/is_completed/:userId", (req, res) => {
   const userId = req.params.userId;
 
   db.get(
-    `SELECT is_first_time FROM users WHERE id = ?`,
+    `SELECT is_completed FROM users WHERE id = ?`,
     [userId],
     function (err, row) {
       if (err) {
-        console.error("Error fetching is_first_time:", err);
+        console.error("Error fetching is_completed:", err);
         res.status(500).send("Internal Server Error");
       } else {
         if (row) {
-          res.status(200).json({ is_first_time: row.is_first_time === 1 });
+          res.status(200).json({ is_completed: row.is_completed === 1 });
         } else {
           res.status(404).send("User not found");
         }
