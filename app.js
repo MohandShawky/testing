@@ -320,6 +320,49 @@ app.get("/api/users/:userId/nutrients", async (req, res) => {
   }
 });
 
+app.post("/api/activity", (req, res) => {
+  const { user_id, value, date, duration } = req.body;
+
+  db.run(
+    "INSERT INTO activity (user_id, value, date, duration) VALUES (?, ?, ?, ?)",
+    [user_id, value, date, duration],
+    function (err) {
+      if (err) {
+        console.error("Error inserting data into activity table:", err);
+        res.status(500).send("Internal Server Error");
+      } else {
+        console.log("Data added to activity table with ID:", this.lastID);
+        res.status(201).send("Data added successfully");
+      }
+    }
+  );
+});
+
+app.get("/api/activity/:userId", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        "SELECT * FROM activity WHERE user_id = ?",
+        [userId],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 app.post("/api/sugar_intake", (req, res) => {
   const { user_id, date, value } = req.body;
 
