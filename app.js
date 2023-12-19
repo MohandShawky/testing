@@ -101,6 +101,12 @@ async function getGlucoseReading(userId, currentYear, currentMonth, type) {
   });
   return rows;
 }
+function calculateAverage(numbers) {
+  if (numbers.length === 0) return 0;
+
+  const sum = numbers.reduce((acc, num) => acc + num, 0);
+  return sum / numbers.length;
+}
 
 app.get("/api/users/:userId/glucose_readings", async (req, res) => {
   try {
@@ -120,12 +126,17 @@ app.get("/api/users/:userId/glucose_readings", async (req, res) => {
       currentMonth,
       "after"
     );
-    console.log(before);
+    const beforeValues = before.map((reading) => reading.value);
+    const afterValues = after.map((reading) => reading.value);
+
+    const allReadings = [...beforeValues, ...afterValues];
+    const avg = calculateAverage(allReadings);
 
     const result = {
       readingsBefore: before,
       readingsAfter: after,
       maxGlucoseValue: await getMaxGlucoseValue(userId),
+      avg: Math.round(avg),
     };
 
     res.json(result);
@@ -284,6 +295,7 @@ app.get("/api/meals/search/:query", async (req, res) => {
         calories: item.calories,
         name: item.name,
         servingSize: item.serving_size_g,
+        carbs: item.carbohydrates_total_g,
       }));
       res.json(simplifiedResult);
     })
