@@ -21,6 +21,72 @@ app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
 
+async function getLogs(userId, logType) {
+  return new Promise((resolve, reject) => {
+    let query, params;
+    switch (logType) {
+      case "glucose":
+        query = "SELECT * FROM glucose_readings WHERE user_id = ?";
+        params = [userId];
+        break;
+      case "sugar":
+        query = "SELECT * FROM sugar WHERE user_id = ?";
+        params = [userId];
+        break;
+      case "activity":
+        query = "SELECT * FROM activity WHERE user_id = ?";
+        params = [userId];
+        break;
+      default:
+        reject("Invalid log type");
+    }
+
+    db.all(query, params, (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+}
+
+function organizeLogsByMonth({ glucoseReadings, sugarIntake, activityData }) {
+  const organizedData = {};
+
+  glucoseReadings.forEach((reading) => {
+    const { user_id, ...filteredData } = reading;
+    const month = new Date(reading.date).toLocaleString("en-US", {
+      month: "short",
+      year: "numeric",
+    });
+    organizedData[month] = organizedData[month] || [];
+    organizedData[month].push({ log_type: "glucose", data: filteredData });
+  });
+
+  sugarIntake.forEach((intake) => {
+    const { user_id, ...filteredData } = intake;
+    const month = new Date(intake.date).toLocaleString("en-US", {
+      month: "short",
+      year: "numeric",
+    });
+    organizedData[month] = organizedData[month] || [];
+    organizedData[month].push({ log_type: "sugar", data: filteredData });
+  });
+
+  activityData.forEach((activity) => {
+    const { user_id, ...filteredData } = activity;
+    const month = new Date(activity.date).toLocaleString("en-US", {
+      month: "short",
+      year: "numeric",
+    });
+    organizedData[month] = organizedData[month] || [];
+    organizedData[month].push({ log_type: "activity", data: filteredData });
+  });
+
+  return organizedData;
+}
+
 async function getMaxGlucoseValue(userId) {
   const before = await _getMaxGlucoseValue(userId, "before");
   const after = await _getMaxGlucoseValue(userId, "after");
@@ -309,9 +375,9 @@ app.get("/api/meals/search/:query", async (req, res) => {
       }
     });
 });
-//##############################
+//#############Keep for now#################
 
-app.post("/api/nutrients", (req, res) => {
+/* app.post("/api/nutrients", (req, res) => {
   const { user_id, date, name, carbs, sugar } = req.body;
 
   db.run(
@@ -352,7 +418,7 @@ app.get("/api/users/:userId/nutrients", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-
+*/
 app.post("/api/activity", (req, res) => {
   const { user_id, value, date, duration } = req.body;
 
@@ -396,11 +462,11 @@ app.get("/api/activity/:userId", async (req, res) => {
   }
 });
 
-app.post("/api/sugar_intake", (req, res) => {
+app.post("/api/sugar", (req, res) => {
   const { user_id, date, value } = req.body;
 
   db.run(
-    "INSERT INTO sugar_intake (user_id, date, value) VALUES (?, ?, ?)",
+    "INSERT INTO sugar (user_id, date, value) VALUES (?, ?, ?)",
     [user_id, date, value],
     function (err) {
       if (err) {
@@ -414,14 +480,14 @@ app.post("/api/sugar_intake", (req, res) => {
   );
 });
 
-app.get("/api/users/:userId/sugar_intake", async (req, res) => {
+app.get("/api/users/:userId/sugar", async (req, res) => {
   try {
     const userId = req.params.userId;
     const currentDate = new Date().toISOString().split("T")[0];
 
     const rows = await new Promise((resolve, reject) => {
       db.all(
-        "SELECT * FROM sugar_intake WHERE user_id = ? AND date = ?",
+        "SELECT * FROM sugar WHERE user_id = ? AND date = ?",
         [userId, currentDate],
         (err, rows) => {
           if (err) {
@@ -438,6 +504,26 @@ app.get("/api/users/:userId/sugar_intake", async (req, res) => {
     } else {
       res.json({ sugarIntake: 0 });
     }
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+app.get("/api/users/:userId/logs/history", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const glucoseReadings = await getLogs(userId, "glucose");
+    const sugarIntake = await getLogs(userId, "sugar");
+    const activityData = await getLogs(userId, "activity");
+
+    const organizedData = organizeLogsByMonth({
+      glucoseReadings,
+      sugarIntake,
+      activityData,
+    });
+
+    res.json(organizedData);
   } catch (error) {
     console.error(error);
     res.status(500).send("Internal Server Error");
