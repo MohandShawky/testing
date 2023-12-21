@@ -51,37 +51,38 @@ async function getLogs(userId, logType) {
   });
 }
 
-function organizeLogsByMonth({ glucoseReadings, sugarIntake, activityData }) {
+function organizeLogsByMonthAndYear({ glucoseReadings, sugar, activityData }) {
   const organizedData = {};
 
+  function getDateKey(date) {
+    return new Date(date).toLocaleString("en-US", {
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  // Organize glucose readings by month
   glucoseReadings.forEach((reading) => {
-    const { user_id, ...filteredData } = reading;
-    const month = new Date(reading.date).toLocaleString("en-US", {
-      month: "short",
-      year: "numeric",
-    });
-    organizedData[month] = organizedData[month] || [];
-    organizedData[month].push({ log_type: "glucose", data: filteredData });
+    const { user_id, id, ...filteredData } = reading;
+    const dateKey = getDateKey(reading.date);
+    organizedData[dateKey] = organizedData[dateKey] || [];
+    organizedData[dateKey].push({ log_type: "glucose", data: filteredData });
   });
 
-  sugarIntake.forEach((intake) => {
-    const { user_id, ...filteredData } = intake;
-    const month = new Date(intake.date).toLocaleString("en-US", {
-      month: "short",
-      year: "numeric",
-    });
-    organizedData[month] = organizedData[month] || [];
-    organizedData[month].push({ log_type: "sugar", data: filteredData });
+  // Organize sugar intake by month
+  sugar.forEach((sugar) => {
+    const { user_id, ...filteredData } = sugar;
+    const dateKey = getDateKey(sugar.date);
+    organizedData[dateKey] = organizedData[dateKey] || [];
+    organizedData[dateKey].push({ log_type: "sugar", data: filteredData });
   });
 
+  // Organize activity data by month
   activityData.forEach((activity) => {
     const { user_id, ...filteredData } = activity;
-    const month = new Date(activity.date).toLocaleString("en-US", {
-      month: "short",
-      year: "numeric",
-    });
-    organizedData[month] = organizedData[month] || [];
-    organizedData[month].push({ log_type: "activity", data: filteredData });
+    const dateKey = getDateKey(activity.date);
+    organizedData[dateKey] = organizedData[dateKey] || [];
+    organizedData[dateKey].push({ log_type: "activity", data: filteredData });
   });
 
   return organizedData;
@@ -500,9 +501,9 @@ app.get("/api/users/:userId/sugar", async (req, res) => {
     });
 
     if (rows.length > 0) {
-      res.json({ sugarIntake: rows[0].value });
+      res.json({ sugar: rows[0].value });
     } else {
-      res.json({ sugarIntake: 0 });
+      res.json({ sugar: 0 });
     }
   } catch (error) {
     console.error(error);
@@ -514,16 +515,22 @@ app.get("/api/users/:userId/logs/history", async (req, res) => {
     const userId = req.params.userId;
 
     const glucoseReadings = await getLogs(userId, "glucose");
-    const sugarIntake = await getLogs(userId, "sugar");
+    const sugar = await getLogs(userId, "sugar");
     const activityData = await getLogs(userId, "activity");
 
-    const organizedData = organizeLogsByMonth({
+    const organizedData = organizeLogsByMonthAndYear({
       glucoseReadings,
-      sugarIntake,
+      sugar,
       activityData,
     });
 
-    res.json(organizedData);
+    // Transform the keys to the desired format
+    const transformedData = Object.keys(organizedData).map((date) => ({
+      date,
+      values: organizedData[date],
+    }));
+
+    res.json(transformedData);
   } catch (error) {
     console.error(error);
     res.status(500).send("Internal Server Error");
