@@ -29,8 +29,8 @@ async function getLogs(userId, logType) {
         query = "SELECT * FROM glucose_readings WHERE user_id = ?";
         params = [userId];
         break;
-      case "sugar":
-        query = "SELECT * FROM sugar WHERE user_id = ?";
+      case "meal":
+        query = "SELECT * FROM meals_data WHERE user_id = ?";
         params = [userId];
         break;
       case "activity":
@@ -51,7 +51,7 @@ async function getLogs(userId, logType) {
   });
 }
 
-function organizeLogsByMonthAndYear({ glucoseReadings, sugar, activityData }) {
+function organizeLogsByMonthAndYear({ glucoseReadings, meal, activityData }) {
   const organizedData = {};
 
   function getDateKey(date) {
@@ -61,28 +61,25 @@ function organizeLogsByMonthAndYear({ glucoseReadings, sugar, activityData }) {
     });
   }
 
-  // Organize glucose readings by month
   glucoseReadings.forEach((reading) => {
     const { user_id, id, ...filteredData } = reading;
     const dateKey = getDateKey(reading.date);
     organizedData[dateKey] = organizedData[dateKey] || [];
-    organizedData[dateKey].push({ log_type: "glucose", data: filteredData });
+    organizedData[dateKey].push({ log_type: 0, data: filteredData });
   });
 
-  // Organize sugar intake by month
-  sugar.forEach((sugar) => {
-    const { user_id, ...filteredData } = sugar;
-    const dateKey = getDateKey(sugar.date);
+  meal.forEach((meal) => {
+    const { user_id, ...filteredData } = meal;
+    const dateKey = getDateKey(meal.date);
     organizedData[dateKey] = organizedData[dateKey] || [];
-    organizedData[dateKey].push({ log_type: "sugar", data: filteredData });
+    organizedData[dateKey].push({ log_type: 1, data: filteredData });
   });
 
-  // Organize activity data by month
   activityData.forEach((activity) => {
     const { user_id, ...filteredData } = activity;
     const dateKey = getDateKey(activity.date);
     organizedData[dateKey] = organizedData[dateKey] || [];
-    organizedData[dateKey].push({ log_type: "activity", data: filteredData });
+    organizedData[dateKey].push({ log_type: 2, data: filteredData });
   });
 
   return organizedData;
@@ -378,7 +375,7 @@ app.get("/api/meals/search/:query", async (req, res) => {
 });
 //#############Keep for now#################
 
-/* app.post("/api/nutrients", (req, res) => {
+app.post("/api/nutrients", (req, res) => {
   const { user_id, date, name, carbs, sugar } = req.body;
 
   db.run(
@@ -390,6 +387,8 @@ app.get("/api/meals/search/:query", async (req, res) => {
         res.status(500).send("Internal Server Error");
       } else {
         console.log("Meal data added with ID:", this.lastID);
+        addSugar(user_id, date, sugar);
+        addCarbs(user_id, date, carbs);
         res.status(201).send("Meal added successfully");
       }
     }
@@ -419,7 +418,7 @@ app.get("/api/users/:userId/nutrients", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-*/
+
 app.post("/api/activity", (req, res) => {
   const { user_id, value, date, duration } = req.body;
 
@@ -463,11 +462,60 @@ app.get("/api/activity/:userId", async (req, res) => {
   }
 });
 
+async function addSugar(user_id, date, value) {
+  await new Promise((resolve, reject) => {
+    db.all(
+      "INSERT INTO sugar (user_id, date, value) VALUES (?, ?, ?)",
+      [user_id, date, value],
+      (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      }
+    );
+  });
+}
+
 app.post("/api/sugar", (req, res) => {
   const { user_id, date, value } = req.body;
 
   db.run(
     "INSERT INTO sugar (user_id, date, value) VALUES (?, ?, ?)",
+    [user_id, date, value],
+    function (err) {
+      if (err) {
+        console.error("Error inserting carbs:", err);
+        res.status(500).send("Internal Server Error");
+      } else {
+        console.log("carbs added with ID:", this.lastID);
+        res.status(201).send("carbs added successfully");
+      }
+    }
+  );
+});
+async function addCarbs(user_id, date, value) {
+  await new Promise((resolve, reject) => {
+    db.all(
+      "INSERT INTO carbs (user_id, date, value) VALUES (?, ?, ?)",
+      [user_id, date, value],
+      (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      }
+    );
+  });
+}
+
+app.post("/api/carb", (req, res) => {
+  const { user_id, date, value } = req.body;
+
+  db.run(
+    "INSERT INTO carbs (user_id, date, value) VALUES (?, ?, ?)",
     [user_id, date, value],
     function (err) {
       if (err) {
@@ -515,16 +563,15 @@ app.get("/api/users/:userId/logs/history", async (req, res) => {
     const userId = req.params.userId;
 
     const glucoseReadings = await getLogs(userId, "glucose");
-    const sugar = await getLogs(userId, "sugar");
+    const meal = await getLogs(userId, "meal");
     const activityData = await getLogs(userId, "activity");
 
     const organizedData = organizeLogsByMonthAndYear({
       glucoseReadings,
-      sugar,
+      meal,
       activityData,
     });
 
-    // Transform the keys to the desired format
     const transformedData = Object.keys(organizedData).map((date) => ({
       date,
       values: organizedData[date],
