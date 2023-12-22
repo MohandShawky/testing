@@ -225,8 +225,8 @@ app.post("/api/add_user", (req, res) => {
 
   db.run(
     `INSERT INTO users 
-          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed, activity_calories)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
       name,
@@ -239,7 +239,8 @@ app.post("/api/add_user", (req, res) => {
       insulin,
       0,
       0,
-      1,
+      0,
+      0,
     ],
     function (err) {
       if (err) {
