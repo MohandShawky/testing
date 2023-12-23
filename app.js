@@ -244,9 +244,12 @@ app.get("/api/users/:userId/risks", async (req, res) => {
     const filteredHighReadings = highReadings.map(
       ({ id, user_id, ...rest }) => rest
     );
-
+    const avg = calculateAverage(
+      filteredHighReadings.map((reading) => reading.value)
+    );
     const result = {
       highReadings: filteredHighReadings,
+      avg: avg,
     };
 
     res.json(result);
