@@ -6,7 +6,7 @@ const axios = require("axios");
 const app = express();
 const port = 3000;
 const apiKey = "sbDMOuA8fhahM1M9c4FUXQ==Cwwljuya8FP8Girs";
-
+const risk_value = 200;
 app.use(bodyParser.json());
 
 const db = new sqlite3.Database("sugarcare_app.db", (err) => {
@@ -165,6 +165,22 @@ async function getGlucoseReading(userId, currentYear, currentMonth, type) {
   });
   return rows;
 }
+async function getGlucoseReadingsInRange(userId, startDate, endDate) {
+  const rows = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT * FROM glucose_readings WHERE user_id = ? AND date BETWEEN ? AND ?`,
+      [userId, startDate, endDate],
+      (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      }
+    );
+  });
+  return rows;
+}
 function calculateAverage(numbers) {
   if (numbers.length === 0) return 0;
 
@@ -210,6 +226,36 @@ app.get("/api/users/:userId/glucose_readings", async (req, res) => {
   }
 });
 
+app.get("/api/users/:userId/risks", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const startDate = req.query.start_date;
+    const endDate = req.query.end_date;
+
+    const readings = await getGlucoseReadingsInRange(
+      userId,
+      startDate,
+      endDate
+    );
+    const highReadings = readings.filter(
+      (reading) => reading.value > risk_value
+    );
+
+    const filteredHighReadings = highReadings.map(
+      ({ id, user_id, ...rest }) => rest
+    );
+
+    const result = {
+      highReadings: filteredHighReadings,
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 app.post("/api/add_user", (req, res) => {
   const {
     userId,
@@ -239,7 +285,7 @@ app.post("/api/add_user", (req, res) => {
       insulin,
       0,
       0,
-      1,
+      0,
     ],
     function (err) {
       if (err) {
@@ -511,7 +557,7 @@ async function addCarbs(user_id, date, value) {
   });
 }
 
-app.post("/api/carb", (req, res) => {
+app.post("/api/carbs", (req, res) => {
   const { user_id, date, value } = req.body;
 
   db.run(
