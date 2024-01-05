@@ -152,8 +152,13 @@ app.get("/api/users/:id", (req, res) => {
 async function getGlucoseReading(userId, currentYear, currentMonth, type) {
   const rows = await new Promise((resolve, reject) => {
     db.all(
-      `SELECT * FROM glucose_readings WHERE user_id = ? AND type = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`,
-      [userId, type, currentYear.toString(), currentMonth.toString()],
+      `SELECT * FROM glucose_readings WHERE user_id = ? AND type = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?`,
+      [
+        userId,
+        type,
+        currentYear.toString(),
+        currentMonth.toString().padStart(2, "0"),
+      ],
       (err, rows) => {
         if (err) {
           reject(err);
@@ -194,21 +199,13 @@ app.get("/api/users/:userId/glucose_readings", async (req, res) => {
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth() + 1;
 
-    const before = await getGlucoseReading(
-      userId,
-      currentYear,
-      currentMonth,
-      "before"
-    );
-    const after = await getGlucoseReading(
-      userId,
-      currentYear,
-      currentMonth,
-      "after"
-    );
+    const [before, after] = await Promise.all([
+      getGlucoseReading(userId, currentYear, currentMonth, "before"),
+      getGlucoseReading(userId, currentYear, currentMonth, "after"),
+    ]);
+
     const beforeValues = before.map((reading) => reading.value);
     const afterValues = after.map((reading) => reading.value);
-
     const allReadings = [...beforeValues, ...afterValues];
     const avg = calculateAverage(allReadings);
 
