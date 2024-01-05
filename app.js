@@ -8,6 +8,7 @@ const port = 3000;
 const apiKey = "sbDMOuA8fhahM1M9c4FUXQ==Cwwljuya8FP8Girs";
 const risk_value = 200;
 const max_sugar = 70.0;
+//commit
 app.use(bodyParser.json());
 
 const db = new sqlite3.Database("sugarcare_app.db", (err) => {
