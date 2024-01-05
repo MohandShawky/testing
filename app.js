@@ -7,6 +7,8 @@ const app = express();
 const port = 3000;
 const apiKey = "sbDMOuA8fhahM1M9c4FUXQ==Cwwljuya8FP8Girs";
 const risk_value = 200;
+const max_sugar = 70.0;
+//commit
 app.use(bodyParser.json());
 
 const db = new sqlite3.Database("sugarcare_app.db", (err) => {
@@ -152,8 +154,13 @@ app.get("/api/users/:id", (req, res) => {
 async function getGlucoseReading(userId, currentYear, currentMonth, type) {
   const rows = await new Promise((resolve, reject) => {
     db.all(
-      `SELECT * FROM glucose_readings WHERE user_id = ? AND type = ? AND strftime('%Y', date) = ? AND strftime('%m', date) = ?`,
-      [userId, type, currentYear.toString(), currentMonth.toString()],
+      `SELECT * FROM glucose_readings WHERE user_id = ? AND type = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?`,
+      [
+        userId,
+        type,
+        currentYear.toString(),
+        currentMonth.toString().padStart(2, "0"),
+      ],
       (err, rows) => {
         if (err) {
           reject(err);
@@ -194,21 +201,13 @@ app.get("/api/users/:userId/glucose_readings", async (req, res) => {
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth() + 1;
 
-    const before = await getGlucoseReading(
-      userId,
-      currentYear,
-      currentMonth,
-      "before"
-    );
-    const after = await getGlucoseReading(
-      userId,
-      currentYear,
-      currentMonth,
-      "after"
-    );
+    const [before, after] = await Promise.all([
+      getGlucoseReading(userId, currentYear, currentMonth, "before"),
+      getGlucoseReading(userId, currentYear, currentMonth, "after"),
+    ]);
+
     const beforeValues = before.map((reading) => reading.value);
     const afterValues = after.map((reading) => reading.value);
-
     const allReadings = [...beforeValues, ...afterValues];
     const avg = calculateAverage(allReadings);
 
@@ -274,7 +273,7 @@ app.post("/api/add_user", (req, res) => {
 
   db.run(
     `INSERT INTO users 
-          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed, activity_calories)
+          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed, max_sugar)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
@@ -289,8 +288,7 @@ app.post("/api/add_user", (req, res) => {
       0,
       0,
       0,
-      0,
-
+      max_sugar,
     ],
     function (err) {
       if (err) {
