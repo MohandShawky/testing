@@ -7,6 +7,7 @@ const app = express();
 const port = 3000;
 const apiKey = "sbDMOuA8fhahM1M9c4FUXQ==Cwwljuya8FP8Girs";
 const risk_value = 200;
+const max_sugar = 70.0;
 app.use(bodyParser.json());
 
 const db = new sqlite3.Database("sugarcare_app.db", (err) => {
@@ -271,8 +272,8 @@ app.post("/api/add_user", (req, res) => {
 
   db.run(
     `INSERT INTO users 
-          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed, max_sugar)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       userId,
       name,
@@ -286,6 +287,7 @@ app.post("/api/add_user", (req, res) => {
       0,
       0,
       0,
+      max_sugar,
     ],
     function (err) {
       if (err) {
