@@ -426,19 +426,19 @@ app.get("/api/meals/search/:query", async (req, res) => {
 //#############Keep for now#################
 
 app.post("/api/nutrients", (req, res) => {
-  const { user_id, meals } = req.body;
+  const { user_id, date, meals } = req.body;
   for (let i = 0; i < meals.length; i++) {
     db.run(
       "INSERT INTO meals_data (user_id, name, date, carbs, sugar) VALUES (?, ?, ?, ?, ?)",
-      [user_id, meals[i]["name"], meals[i]["date"], meals[i]["carbs"], meals[i]["sugar"]],
+      [user_id, meals[i]["name"], date, meals[i]["carbs"], meals[i]["sugar"]],
       function (err) {
         if (err) {
           console.error("Error inserting meal:", err);
           res.status(500).send("Internal Server Error");
         } else {
           console.log("Meal data added with ID:", this.lastID);
-          addSugar(user_id, meals[i]["date"], meals[i]["sugar"]);
-          addCarbs(user_id, meals[i]["date"], meals[i]["carbs"]);
+          addSugar(user_id, date, meals[i]["sugar"]);
+          addCarbs(user_id, date, meals[i]["carbs"]);
           res.status(201).send("Meal added successfully");
         }
       }
