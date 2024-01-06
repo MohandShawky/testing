@@ -441,33 +441,63 @@ async function addSugar(user_id, date, value) {
 }
 async function updateTotalSugarForUser(userId, date) {
   try {
-    const totalSugar = await new Promise((resolve, reject) => {
-      db.get(
-        "SELECT SUM(sugar) AS totalSugar FROM meals_data WHERE user_id = ? AND date = ?",
+    const meals = await new Promise((resolve, reject) => {
+      db.all(
+        "SELECT sugar FROM meals_data WHERE user_id = ? AND date = ?",
         [userId, date],
-        (err, row) => {
+        (err, rows) => {
           if (err) {
             reject(err);
           } else {
-            resolve(row ? row.totalSugar : 0);
+            resolve(rows || []);
           }
         }
       );
     });
-
-    await new Promise((resolve, reject) => {
-      db.run(
-        "UPDATE users SET sugar = ? WHERE id = ?",
-        [totalSugar, userId],
-        (err) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
+    console.log("Meals data:", meals);
+    const sugarToAdd = meals.reduce((acc, meal) => {
+      return acc + (meal.sugar || 0);
+    }, 0);
+    console.log("Sugar to add:", sugarToAdd);
+    const existingTotalSugar = await new Promise((resolve, reject) => {
+      db.get("SELECT sugar FROM users WHERE id = ?", [userId], (err, row) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(row ? row.sugar : 0);
         }
-      );
+      });
     });
+    const newTotalSugar = existingTotalSugar + sugarToAdd;
+    if (existingTotalSugar === 0) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          "INSERT INTO users (id, sugar) VALUES (?, ?)",
+          [userId, newTotalSugar],
+          (err) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve();
+            }
+          }
+        );
+      });
+    } else {
+      await new Promise((resolve, reject) => {
+        db.run(
+          "UPDATE users SET sugar = ? WHERE id = ?",
+          [newTotalSugar, userId],
+          (err) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve();
+            }
+          }
+        );
+      });
+    }
 
     console.log(`Total sugar updated for user ${userId} on ${date}`);
   } catch (error) {
@@ -491,34 +521,46 @@ async function addCarbs(user_id, date, value) {
     );
   });
 }
-async function insertMealData(user_id, meal) {
-  return new Promise((resolve, reject) => {
-    db.run(
-      "INSERT INTO meals_data (user_id, name, date, carbs, sugar) VALUES (?, ?, ?, ?, ?)",
-      [user_id, meal.name, meal.date, meal.carbs, meal.sugar],
-      function (err) {
-        if (err) {
-          console.error("Error inserting meal:", err);
-          reject(err);
-        } else {
-          console.log("Meal data added with ID:", this.lastID);
-          addSugar(user_id, meal.date, meal.sugar);
-          addCarbs(user_id, meal.date, meal.carbs);
-          updateTotalSugarForUser(user_id, meal.date);
-          resolve();
-        }
-      }
-    );
-  });
+async function insertMealData(user_id, meals) {
+  try {
+    let totalSugarToAdd = 0;
+
+    for (let i = 0; i < meals.length; i++) {
+      const meal = meals[i];
+      await new Promise((resolve, reject) => {
+        db.run(
+          "INSERT INTO meals_data (user_id, name, date, carbs, sugar) VALUES (?, ?, ?, ?, ?)",
+          [user_id, meal.name, meal.date, meal.carbs, meal.sugar],
+          function (err) {
+            if (err) {
+              console.error("Error inserting meal:", err);
+              reject(err);
+            } else {
+              console.log("Meal data added with ID:", this.lastID);
+              addSugar(user_id, meal.date, meal.sugar);
+              addCarbs(user_id, meal.date, meal.carbs);
+              totalSugarToAdd += meal.sugar;
+              resolve();
+            }
+          }
+        );
+      });
+    }
+
+    // Update total sugar for the user once after all meals have been inserted
+    await updateTotalSugarForUser(user_id, meals[0].date);
+    console.log("Total sugar updated for user", user_id);
+  } catch (error) {
+    console.error("Error inserting meals:", error);
+    throw error;
+  }
 }
 
 app.post("/api/nutrients", async (req, res) => {
   const { user_id, meals } = req.body;
 
   try {
-    for (let i = 0; i < meals.length; i++) {
-      await insertMealData(user_id, meals[i]);
-    }
+    await insertMealData(user_id, meals);
     res.status(201).send("Meals added successfully");
   } catch (err) {
     console.error("Error inserting meals:", err);
@@ -678,6 +720,60 @@ app.get("/api/users/:userId/sugar", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+app.get("/api/users/:userId/carbs/weekly", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const currentDate = new Date();
+    const currentDayOfWeek = currentDate.getDay();
+    const daysUntilSaturday = currentDayOfWeek === 6 ? 0 : 6 - currentDayOfWeek;
+    const weekStartDate = new Date(currentDate);
+    weekStartDate.setDate(currentDate.getDate() + daysUntilSaturday);
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 6);
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT * FROM carbs WHERE user_id = ? AND date BETWEEN ? AND ? ORDER BY date`,
+        [
+          userId,
+          weekStartDate.toISOString().split("T")[0],
+          weekEndDate.toISOString().split("T")[0],
+        ],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+    const dayValuesMap = new Map();
+    rows.forEach((row) => {
+      const rowDate = row.date.split(" ")[0];
+      const existingValue = dayValuesMap.get(rowDate) || 0;
+      dayValuesMap.set(rowDate, existingValue + row.value);
+    });
+
+    const orderedData = Array.from({ length: 7 }, (_, index) => {
+      const currentDate = new Date(weekStartDate);
+      currentDate.setDate(currentDate.getDate() + index);
+      const formattedDate = currentDate.toISOString().split("T")[0];
+
+      return dayValuesMap.get(formattedDate) || 0;
+    });
+
+    const result = {
+      data: orderedData,
+      avg: calculateAverage(orderedData),
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 app.get("/api/users/:userId/logs/history", async (req, res) => {
   try {
     const userId = req.params.userId;
