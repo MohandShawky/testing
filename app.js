@@ -425,26 +425,40 @@ app.get("/api/meals/search/:query", async (req, res) => {
 });
 //#############Keep for now#################
 
-app.post("/api/nutrients", (req, res) => {
-  const { user_id, date, meals } = req.body;
-  for (let i = 0; i < meals.length; i++) {
+app.post("/api/nutrients", async (req, res) => {
+  const { user_id, meals } = req.body;
+
+  try {
+    for (let i = 0; i < meals.length; i++) {
+      await insertMealData(user_id, meals[i]);
+    }
+    res.status(201).send("Meals added successfully");
+  } catch (err) {
+    console.error("Error inserting meals:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+async function insertMealData(user_id, meal) {
+  return new Promise((resolve, reject) => {
     db.run(
       "INSERT INTO meals_data (user_id, name, date, carbs, sugar) VALUES (?, ?, ?, ?, ?)",
-      [user_id, meals[i]["name"], date, meals[i]["carbs"], meals[i]["sugar"]],
+      [user_id, meal.name, meal.date, meal.carbs, meal.sugar],
       function (err) {
         if (err) {
           console.error("Error inserting meal:", err);
-          res.status(500).send("Internal Server Error");
+          reject(err);
         } else {
           console.log("Meal data added with ID:", this.lastID);
-          addSugar(user_id, date, meals[i]["sugar"]);
-          addCarbs(user_id, date, meals[i]["carbs"]);
-          res.status(201).send("Meal added successfully");
+          addSugar(user_id, meal.date, meal.sugar);
+          addCarbs(user_id, meal.date, meal.carbs);
+          resolve();
         }
       }
     );
-  }
-});
+  });
+}
+
 // app.post("/api/nutrients", (req, res) => {
 //   const { user_id, date, name, carbs, sugar } = req.body;
 
