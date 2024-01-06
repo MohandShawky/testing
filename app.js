@@ -423,7 +423,94 @@ app.get("/api/meals/search/:query", async (req, res) => {
       }
     });
 });
-//#############Keep for now#################
+
+async function addSugar(user_id, date, value) {
+  await new Promise((resolve, reject) => {
+    db.all(
+      "INSERT INTO sugar (user_id, date, value) VALUES (?, ?, ?)",
+      [user_id, date, value],
+      (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      }
+    );
+  });
+}
+async function updateTotalSugarForUser(userId, date) {
+  try {
+    const totalSugar = await new Promise((resolve, reject) => {
+      db.get(
+        "SELECT SUM(sugar) AS totalSugar FROM meals_data WHERE user_id = ? AND date = ?",
+        [userId, date],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row ? row.totalSugar : 0);
+          }
+        }
+      );
+    });
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        "UPDATE users SET sugar = ? WHERE id = ?",
+        [totalSugar, userId],
+        (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        }
+      );
+    });
+
+    console.log(`Total sugar updated for user ${userId} on ${date}`);
+  } catch (error) {
+    console.error("Error updating total sugar:", error);
+    throw error;
+  }
+}
+
+async function addCarbs(user_id, date, value) {
+  await new Promise((resolve, reject) => {
+    db.all(
+      "INSERT INTO carbs (user_id, date, value) VALUES (?, ?, ?)",
+      [user_id, date, value],
+      (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      }
+    );
+  });
+}
+async function insertMealData(user_id, meal) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      "INSERT INTO meals_data (user_id, name, date, carbs, sugar) VALUES (?, ?, ?, ?, ?)",
+      [user_id, meal.name, meal.date, meal.carbs, meal.sugar],
+      function (err) {
+        if (err) {
+          console.error("Error inserting meal:", err);
+          reject(err);
+        } else {
+          console.log("Meal data added with ID:", this.lastID);
+          addSugar(user_id, meal.date, meal.sugar);
+          addCarbs(user_id, meal.date, meal.carbs);
+          updateTotalSugarForUser(user_id, meal.date);
+          resolve();
+        }
+      }
+    );
+  });
+}
 
 app.post("/api/nutrients", async (req, res) => {
   const { user_id, meals } = req.body;
@@ -438,26 +525,6 @@ app.post("/api/nutrients", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-
-async function insertMealData(user_id, meal) {
-  return new Promise((resolve, reject) => {
-    db.run(
-      "INSERT INTO meals_data (user_id, name, date, carbs, sugar) VALUES (?, ?, ?, ?, ?)",
-      [user_id, meal.name, meal.date, meal.carbs, meal.sugar],
-      function (err) {
-        if (err) {
-          console.error("Error inserting meal:", err);
-          reject(err);
-        } else {
-          console.log("Meal data added with ID:", this.lastID);
-          addSugar(user_id, meal.date, meal.sugar);
-          addCarbs(user_id, meal.date, meal.carbs);
-          resolve();
-        }
-      }
-    );
-  });
-}
 
 // app.post("/api/nutrients", (req, res) => {
 //   const { user_id, date, name, carbs, sugar } = req.body;
@@ -546,22 +613,6 @@ app.get("/api/activity/:userId", async (req, res) => {
   }
 });
 
-async function addSugar(user_id, date, value) {
-  await new Promise((resolve, reject) => {
-    db.all(
-      "INSERT INTO sugar (user_id, date, value) VALUES (?, ?, ?)",
-      [user_id, date, value],
-      (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      }
-    );
-  });
-}
-
 app.post("/api/sugar", (req, res) => {
   const { user_id, date, value } = req.body;
 
@@ -579,21 +630,6 @@ app.post("/api/sugar", (req, res) => {
     }
   );
 });
-async function addCarbs(user_id, date, value) {
-  await new Promise((resolve, reject) => {
-    db.all(
-      "INSERT INTO carbs (user_id, date, value) VALUES (?, ?, ?)",
-      [user_id, date, value],
-      (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      }
-    );
-  });
-}
 
 app.post("/api/carbs", (req, res) => {
   const { user_id, date, value } = req.body;
