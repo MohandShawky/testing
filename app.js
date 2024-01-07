@@ -194,6 +194,15 @@ function calculateAverage(numbers) {
   const sum = numbers.reduce((acc, num) => acc + num, 0);
   return sum / numbers.length;
 }
+function calcMaxSugar(birthDateYear, weight, height) {
+  const userbirthdate = new Date(birthDateYear).getFullYear();
+  const currentDate = new Date().getFullYear();
+
+  const age = currentDate - userbirthdate;
+
+  const bmr = 655 + 9.6 * weight + 1.8 * height - 4.7 * age;
+  return bmr * 0.1;
+}
 
 app.get("/api/users/:userId/glucose_readings", async (req, res) => {
   try {
@@ -289,7 +298,7 @@ app.post("/api/add_user", (req, res) => {
       0,
       0,
       0,
-      max_sugar,
+      calcMaxSugar(birthDate, weight, height),
     ],
     function (err) {
       if (err) {
