@@ -439,7 +439,7 @@ async function addSugar(user_id, date, value) {
     );
   });
 }
-async function updateTotalSugarForUser(userId, date) {
+async function updateTotalSugarForUser(userId, date, totalSugarToAdd) {
   try {
     const meals = await new Promise((resolve, reject) => {
       db.all(
@@ -455,9 +455,9 @@ async function updateTotalSugarForUser(userId, date) {
       );
     });
 
-    const sugarToAdd = meals.reduce((acc, meal) => {
-      return acc + (meal.sugar || 0);
-    }, 0);
+    // const sugarToAdd = meals.reduce((acc, meal) => {
+    //   return acc + (meal.sugar || 0);
+    // }, 0);
 
     const existingTotalSugar = await new Promise((resolve, reject) => {
       db.get("SELECT sugar FROM users WHERE id = ?", [userId], (err, row) => {
@@ -469,7 +469,7 @@ async function updateTotalSugarForUser(userId, date) {
       });
     });
 
-    const newTotalSugar = sugarToAdd;
+    const newTotalSugar = totalSugarToAdd + existingTotalSugar;
 
     if (existingTotalSugar === 0) {
       await new Promise((resolve, reject) => {
@@ -487,6 +487,7 @@ async function updateTotalSugarForUser(userId, date) {
       });
     } else {
       await new Promise((resolve, reject) => {
+        console.log(newTotalSugar);
         db.run(
           "UPDATE users SET sugar = ? WHERE id = ?",
           [newTotalSugar, userId],
@@ -549,7 +550,7 @@ async function insertMealData(user_id, meals) {
       });
     }
 
-    await updateTotalSugarForUser(user_id, meals[0].date);
+    await updateTotalSugarForUser(user_id, meals[0].date, totalSugarToAdd);
     console.log("Total sugar updated for user", user_id);
   } catch (error) {
     console.error("Error inserting meals:", error);
@@ -559,7 +560,6 @@ async function insertMealData(user_id, meals) {
 
 app.post("/api/nutrients", async (req, res) => {
   const { user_id, meals } = req.body;
-
   try {
     await insertMealData(user_id, meals);
     res.status(201).send("Meals added successfully");
