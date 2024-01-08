@@ -199,7 +199,9 @@ function calcMaxSugar(birthDateYear, weight, height) {
   const currentDate = new Date().getFullYear();
   const age = currentDate - userbirthdate;
   const bmr = 655 + 9.6 * weight + 1.8 * height - 4.7 * age;
-  return Math.round((bmr * 0.1) / 4);
+  const finalbmr = Math.round((bmr * 0.1) / 4);
+  console.log(finalbmr);
+  return finalbmr;
 }
 
 app.get("/api/users/:userId/glucose_readings", async (req, res) => {
