@@ -200,7 +200,10 @@ function calcMaxSugar(birthDateYear, weight, height) {
   const age = currentDate - userbirthdate;
   const bmr = 655 + 9.6 * weight + 1.8 * height - 4.7 * age;
   const finalbmr = Math.round((bmr * 0.1) / 4);
-  console.log(finalbmr);
+  // console.log(weight);
+  // console.log(height);
+  // console.log(age);
+  // console.log(finalbmr);
   return finalbmr;
 }
 
@@ -279,7 +282,6 @@ app.post("/api/add_user", (req, res) => {
     birthDate,
     diabetesType,
   } = req.body;
-
   db.run(
     `INSERT INTO users 
           (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed, activity_calories, max_sugar)
@@ -298,7 +300,7 @@ app.post("/api/add_user", (req, res) => {
       0,
       0,
       0,
-      calcMaxSugar(birthDate, weight, height),
+      0,
     ],
     function (err) {
       if (err) {
@@ -323,7 +325,12 @@ app.put("/api/update_user/:userId", (req, res) => {
     birthDate,
     diabetesType,
   } = req.body;
-
+  const userbirthdate = new Date(birthDate).getFullYear();
+  const currentDate = new Date().getFullYear();
+  const age = currentDate - userbirthdate;
+  console.log(age);
+  console.log(weight);
+  console.log(height);
   db.run(
     `UPDATE users 
      SET birth_date = ?,
@@ -333,7 +340,8 @@ app.put("/api/update_user/:userId", (req, res) => {
          glucose_level = ?,
          a1c = ?,
          insulin = ?,
-         is_completed = 0
+         is_completed = 0,
+         max_sugar = ?
      WHERE id = ?`,
     [
       birthDate,
@@ -343,6 +351,7 @@ app.put("/api/update_user/:userId", (req, res) => {
       glucoseLevel,
       a1c,
       insulin,
+      calcMaxSugar(birthDate, weight, height),
       userId,
     ],
     function (err) {
