@@ -454,11 +454,11 @@ async function updateTotalSugarForUser(userId, date) {
         }
       );
     });
-    console.log("Meals data:", meals);
+
     const sugarToAdd = meals.reduce((acc, meal) => {
       return acc + (meal.sugar || 0);
     }, 0);
-    console.log("Sugar to add:", sugarToAdd);
+
     const existingTotalSugar = await new Promise((resolve, reject) => {
       db.get("SELECT sugar FROM users WHERE id = ?", [userId], (err, row) => {
         if (err) {
@@ -468,7 +468,9 @@ async function updateTotalSugarForUser(userId, date) {
         }
       });
     });
-    const newTotalSugar = existingTotalSugar + sugarToAdd;
+
+    const newTotalSugar = sugarToAdd;
+
     if (existingTotalSugar === 0) {
       await new Promise((resolve, reject) => {
         db.run(
@@ -547,7 +549,6 @@ async function insertMealData(user_id, meals) {
       });
     }
 
-    // Update total sugar for the user once after all meals have been inserted
     await updateTotalSugarForUser(user_id, meals[0].date);
     console.log("Total sugar updated for user", user_id);
   } catch (error) {
@@ -725,11 +726,12 @@ app.get("/api/users/:userId/carbs/weekly", async (req, res) => {
     const userId = req.params.userId;
     const currentDate = new Date();
     const currentDayOfWeek = currentDate.getDay();
-    const daysUntilSaturday = currentDayOfWeek === 6 ? 0 : 6 - currentDayOfWeek;
+    const daysUntilSaturday = (currentDayOfWeek + 7 - 6) % 7;
+    const daysUntilFriday = (5 - currentDayOfWeek + 7) % 7;
     const weekStartDate = new Date(currentDate);
-    weekStartDate.setDate(currentDate.getDate() + daysUntilSaturday);
-    const weekEndDate = new Date(weekStartDate);
-    weekEndDate.setDate(weekStartDate.getDate() + 6);
+    weekStartDate.setDate(currentDate.getDate() - daysUntilSaturday);
+    const weekEndDate = new Date(currentDate);
+    weekEndDate.setDate(currentDate.getDate() + daysUntilFriday);
     const rows = await new Promise((resolve, reject) => {
       db.all(
         `SELECT * FROM carbs WHERE user_id = ? AND date BETWEEN ? AND ? ORDER BY date`,
@@ -761,7 +763,9 @@ app.get("/api/users/:userId/carbs/weekly", async (req, res) => {
 
       return dayValuesMap.get(formattedDate) || 0;
     });
-
+    // console.log(weekStartDate);
+    // console.log(weekEndDate);
+    // console.log(currentDate);
     const result = {
       data: orderedData,
       avg: calculateAverage(orderedData),
