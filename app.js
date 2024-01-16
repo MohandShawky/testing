@@ -336,10 +336,10 @@ app.put("/api/update_user/:userId", (req, res) => {
   const currentDate = new Date().getFullYear();
   const age = currentDate - userbirthdate;
   const isMaleValue = isMale === true ? 1 : isMale === false ? 0 : null;
-
-  console.log(age);
-  console.log(weight);
-  console.log(height);
+  console.log(isMaleValue);
+  // console.log(age);
+  // console.log(weight);
+  // console.log(height);
   db.run(
     `UPDATE users 
      SET birth_date = ?,
@@ -351,7 +351,7 @@ app.put("/api/update_user/:userId", (req, res) => {
          insulin = ?,
          is_completed = 0,
          max_sugar = ?,
-         isMale =?,
+         isMale =?
      WHERE id = ?`,
     [
       birthDate,
@@ -362,8 +362,8 @@ app.put("/api/update_user/:userId", (req, res) => {
       a1c,
       insulin,
       calcMaxSugar(birthDate, weight, height),
-      userId,
       isMaleValue,
+      userId,
     ],
     function (err) {
       if (err) {
