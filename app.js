@@ -143,7 +143,11 @@ app.get("/api/users/:id", (req, res) => {
       res.status(500).send("Internal Server Error");
     } else {
       if (row) {
-        res.json(row);
+        const userResponse = {
+          ...row,
+          isMale: row.isMale === 1 ? true : row.isMale === 0 ? false : null,
+        };
+        res.json(userResponse);
       } else {
         res.status(404).send("User not found");
       }
@@ -282,10 +286,11 @@ app.post("/api/add_user", (req, res) => {
     birthDate,
     diabetesType,
   } = req.body;
+
   db.run(
     `INSERT INTO users 
-          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed, activity_calories, max_sugar)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, name, birth_date, height, weight, diabetes_type, glucose_level, a1c, insulin, carbs, sugar, is_completed, activity_calories, max_sugar, isMale)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
     [
       userId,
       name,
@@ -301,6 +306,7 @@ app.post("/api/add_user", (req, res) => {
       0,
       0,
       0,
+      null,
     ],
     function (err) {
       if (err) {
@@ -324,10 +330,13 @@ app.put("/api/update_user/:userId", (req, res) => {
     a1c,
     birthDate,
     diabetesType,
+    isMale,
   } = req.body;
   const userbirthdate = new Date(birthDate).getFullYear();
   const currentDate = new Date().getFullYear();
   const age = currentDate - userbirthdate;
+  const isMaleValue = isMale === true ? 1 : isMale === false ? 0 : null;
+
   console.log(age);
   console.log(weight);
   console.log(height);
@@ -341,7 +350,8 @@ app.put("/api/update_user/:userId", (req, res) => {
          a1c = ?,
          insulin = ?,
          is_completed = 0,
-         max_sugar = ?
+         max_sugar = ?,
+         isMale =?,
      WHERE id = ?`,
     [
       birthDate,
@@ -353,6 +363,7 @@ app.put("/api/update_user/:userId", (req, res) => {
       insulin,
       calcMaxSugar(birthDate, weight, height),
       userId,
+      isMaleValue,
     ],
     function (err) {
       if (err) {
